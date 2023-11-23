@@ -4,9 +4,28 @@ services:
   redis:
     image: redis
     restart: always
-    command: redis-server --requirepass eYVX7EwVmmxKPCDmwMtyKVge8oLd2t81
+    command: redis-server --requirepass your-password
+    ports:
+      - "6379:6379"
+    networks:
+      - back-office
+  database:
+    image: mariadb
+    restart: always
+    environment:
+      MYSQL_ROOT_PASSWORD: your-root-password
+      MYSQL_DATABASE: your-database-name
+      MYSQL_USER: your-username
+      MYSQL_PASSWORD: your-password
+      DATABASE_URL: "mariadb://your-username:your-password@database:3306/your-database-name"
+    ports:
+      - "3306:3306"
+    volumes:
+      - mariadb_data:/var/lib/mysql
     networks:
       - back-office
 
 networks:
   back-office:
+volumes:
+  mariadb_data:
