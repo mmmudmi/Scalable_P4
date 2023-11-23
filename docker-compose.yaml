@@ -1,0 +1,12 @@
+version: '3'
+
+services:
+  redis:
+    image: redis
+    restart: always
+    command: redis-server --requirepass eYVX7EwVmmxKPCDmwMtyKVge8oLd2t81
+    networks:
+      - back-office
+
+networks:
+  back-office:
