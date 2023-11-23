@@ -1,9 +1,22 @@
-from typing import Any, Union
+from typing import Any
 
 from fastapi import FastAPI, Request
 from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
+from db import database, user_services, models, schemas
+
+models.Base.metadata.create_all(bind=database.engine)
+
+
+# Dependency
+def get_db():
+    db = database.SessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()
+
 
 app = FastAPI()
 app.mount("/static", StaticFiles(directory="static"), name="static")
