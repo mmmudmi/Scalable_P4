@@ -49,10 +49,9 @@ def read_item(item_id: int):
 def payment(id: int):
     jobs = task_queue.enqueue(manager,id)
     return {
-        "success": True,
         "job_id": jobs.id,
-        "current_task": len(task_queue),
-        "id": id,
+        "waiting_tasks": len(task_queue),
+        "current_id": id,
     }
 
 # @app.post("/createItem")

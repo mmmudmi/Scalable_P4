@@ -17,7 +17,7 @@ def rollback_deliver_job():
     print("Rolling back changes for deliverJob...")
 
 def manager(id):
-    print("\n== ", id, " Manager started ==")
+    print("\n== Manager enqueues id:", id, " ==\n")
 
     payment_job = task_queue.enqueue(paymentJob,id)
     payment_job.description = "paymentJob"
