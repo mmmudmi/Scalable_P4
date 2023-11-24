@@ -13,7 +13,7 @@ config.set_main_option(
     "sqlalchemy.url",
     os.getenv(
         "DATABASE_URL",
-        "mariadb://your-username:your-password@localhost:3306/your-database-name",
+        "mariadb://your-username:your-password@localhost:3307/your-database-name",
     ),
 )
 # Interpret the config file for Python logging.

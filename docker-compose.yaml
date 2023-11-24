@@ -17,9 +17,9 @@ services:
       MYSQL_DATABASE: your-database-name
       MYSQL_USER: your-username
       MYSQL_PASSWORD: your-password
-      DATABASE_URL: "mariadb://your-username:your-password@database:3306/your-database-name"
+      DATABASE_URL: "mariadb://your-username:your-password@database:3307/your-database-name"
     ports:
-      - "3306:3306"
+      - "3307:3306"
     volumes:
       - mariadb_data:/var/lib/mysql
     networks:
