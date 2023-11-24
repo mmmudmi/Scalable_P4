@@ -6,6 +6,10 @@ def get_user_all(db: Session) -> schemas.User:
     return db.query(models.User).all()
 
 
+def get_user(db: Session, user_id: int) -> schemas.User | None:
+    return db.query(models.User).filter(models.User.id == user_id).first()
+
+
 def create_user(db: Session, user: schemas.User):
     db_user = models.User(**user.model_dump())
     db.add(db_user)
