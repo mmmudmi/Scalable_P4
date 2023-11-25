@@ -2,7 +2,7 @@ version: '3'
 
 services:
   redis:
-    image: redis
+    image: redis:alpine
     restart: always
     command: redis-server --requirepass your-password
     ports:
@@ -21,6 +21,17 @@ services:
       - ./init-scripts:/docker-entrypoint-initdb.d
     networks:
       - back-office
+  # order_service:
+  #   image: order_service
+  #   build:
+  #     dockerfile: ./order/Dockerfile
+  #   depends_on:
+  #     - database
+  #     - redis
+  #   ports:
+  #     - "8000:8000"
+  #   networks:
+  #     - back-office
 
 networks:
   back-office:

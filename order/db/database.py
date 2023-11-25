@@ -2,11 +2,12 @@ import os
 from sqlalchemy import create_engine
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
+from dotenv import load_dotenv
 
-
+load_dotenv()
 SQLALCHEMY_DATABASE_URL = os.getenv(
     "DATABASE_URL",
-    "mariadb://your-username:your-password@localhost:3306/your-database-name",
+    "mariadb://orders-username:orders-password@localhost:3307/orders",
 )
 # SQLALCHEMY_DATABASE_URL = "postgresql://user:password@postgresserver/db"
 
