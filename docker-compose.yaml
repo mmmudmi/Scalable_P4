@@ -13,19 +13,14 @@ services:
     image: mariadb
     restart: always
     environment:
+      MYSQL_USER: admin
       MYSQL_ROOT_PASSWORD: your-root-password
-      MYSQL_DATABASE: your-database-name
-      MYSQL_USER: your-username
-      MYSQL_PASSWORD: your-password
-      DATABASE_URL: "mariadb://your-username:your-password@database:3306/your-database-name"
     ports:
       - "3306:3306"
     volumes:
-      - mariadb_data:/var/lib/mysql
+      - ./init-scripts:/docker-entrypoint-initdb.d
     networks:
       - back-office
 
 networks:
   back-office:
-volumes:
-  mariadb_data:
