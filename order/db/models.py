@@ -8,7 +8,7 @@ class Order(Base):
     __tablename__ = "orders"
 
     id = Column(Integer, primary_key=True, index=True)
-    user = Column(String(60), index=True)
-    item = Column(String(60), index=True)
-    price = Column(Integer)
-    status = Column(String(60), index=True)
+    user = Column(String(60), index=True, nullable=False)
+    item = Column(String(60), index=True, nullable=False)
+    price = Column(Integer, nullable=False)
+    status = Column(String(60), index=True, nullable=False)

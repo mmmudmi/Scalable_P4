@@ -2,29 +2,27 @@ from sqlalchemy.orm import Session
 from db import schemas, models
 
 
-def get_order_all(db: Session) -> schemas.Order:
-    return db.query(models.Order).all()
+def get_all(db: Session, model: models.Base):
+    return db.query(model).all()
 
 
-def get_order(db: Session, order_id: int) -> schemas.Order | None:
-    return db.query(models.Order).filter(models.Order.id == order_id).first()
+def get_by_id(db: Session, model: models.Base, id: int):
+    return db.query(model).filter(model.id == id).first()
 
 
-def create_order(db: Session, order: schemas.Order):
-    db_order = models.Order(**order.model_dump())
-    db.add(db_order)
+def create(db: Session, model: models.Base, data: schemas.AbstractBase):
+    db_data = model(**data.model_dump())
+    db.add(db_data)
     db.commit()
-    db.refresh(db_order)
-    return db_order
+    db.refresh(db_data)
+    return db_data
 
 
-def update_order_credit(db: Session, order: schemas.Order) -> None:
-    db.query(models.Order).filter(models.Order.id == order.id).update(
-        order.model_dump()
-    )
+def update(db: Session, model: models.Base, data: schemas.AbstractBase) -> None:
+    db.query(model).filter(model.id == data.id).update(data.model_dump())
     db.commit()
 
 
-def deleted_order(db: Session, order_id: int) -> None:
-    db.query(models.Order).filter(models.Order.id == order_id).delete()
+def delete(db: Session, model: models.Base, id: int) -> None:
+    db.query(model).filter(model.id == id).delete()
     db.commit()

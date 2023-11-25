@@ -25,14 +25,14 @@ db_session = database.SessionLocal()
 
 @app.get("/order")
 def get_all_order():
-    return crud.get_order_all(db_session)
+    return crud.get_all(db_session, models.Order)
 
 
 @app.post("/order")
 def create_order(order: schemas.Order):
-    return crud.create_order(db_session, order)
+    return crud.create(db_session, models.Order, order)
 
 
 @app.get("/order/{order_id}")
 def get_order(order_id: int):
-    return crud.get_order(db_session, order_id)
+    return crud.get_by_id(db_session, models.Order, order_id)
