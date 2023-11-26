@@ -9,8 +9,9 @@ class Order(AbstractBase):
     id: int | None = None
     user: str
     item: str
-    price: str
-    status: str
+    amount: int
+    total: int
+    status: str = "Incomplete"
 
     class Config:
         from_attributes = True

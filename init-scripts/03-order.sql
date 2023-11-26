@@ -12,7 +12,8 @@ create table orders
         primary key,
     user   varchar(60) not null,
     item   varchar(60) not null,
-    price  int         not null,
+    amount int         not null,
+    total  int         not null,
     status varchar(60) not null
 );
 
