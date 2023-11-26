@@ -6,6 +6,10 @@ def get_all(db: Session, model: models.Base):
     return db.query(model).all()
 
 
+def delete_all(db: Session, model: models.Base):
+    return db.query(model).delete()
+
+
 def get_by_id(db: Session, model: models.Base, id: int):
     return db.query(model).filter(model.id == id).first()
 
