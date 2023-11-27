@@ -12,8 +12,10 @@ create table items
         primary key,
     name     varchar(60) not null,
     quantity int         null,
+    price    DECIMAL(10, 2) NOT NULL,
     constraint ix_items_name
-        unique (name)
+        unique (name),
+    
 );
 
 create index ix_items_id
