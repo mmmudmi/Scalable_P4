@@ -1,4 +1,3 @@
-import re
 from fastapi import FastAPI
 from db import database, models, schemas, crud
 from redis import Redis

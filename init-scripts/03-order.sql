@@ -6,15 +6,14 @@ FLUSH PRIVILEGES;
 
 USE orders;
 
-create table orders
+CREATE TABLE orders
 (
-    id     int auto_increment
-        primary key,
-    user   varchar(60) not null,
-    item   varchar(60) not null,
-    amount int         not null,
-    total  int         not null,
-    status varchar(60) not null
+    id     INT AUTO_INCREMENT PRIMARY KEY,
+    user   VARCHAR(60) NOT NULL,
+    item   VARCHAR(60) NOT NULL,
+    amount INT NOT NULL,
+    total  DECIMAL(10, 2) NOT NULL,
+    status VARCHAR(60) NOT NULL
 );
 
 create index ix_orders_id

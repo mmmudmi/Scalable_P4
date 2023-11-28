@@ -6,16 +6,13 @@ FLUSH PRIVILEGES;
 
 USE inventory;
 
-create table items
+CREATE TABLE items
 (
-    id       int auto_increment
-        primary key,
-    name     varchar(60) not null,
-    quantity int         null,
+    id       INT AUTO_INCREMENT PRIMARY KEY,
+    name     VARCHAR(60) NOT NULL,
+    quantity INT NOT NULL,
     price    DECIMAL(10, 2) NOT NULL,
-    constraint ix_items_name
-        unique (name),
-    
+    CONSTRAINT ix_items_name UNIQUE (name)
 );
 
 create index ix_items_id
