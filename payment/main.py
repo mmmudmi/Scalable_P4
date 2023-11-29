@@ -18,10 +18,7 @@ def get_db():
         db.close()
 
 
-celery = Celery("tasks", broker="redis://:your-password@localhost:6379/0")
 app = FastAPI()
-redis_con = Redis(host="localhost", port=6379)
-task_queue = Queue("task_queue", connection=redis_con)
 db_session = database.SessionLocal()
 
 
