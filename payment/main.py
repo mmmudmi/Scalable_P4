@@ -35,6 +35,11 @@ def get_or_create_user(username: str):
     return new_user
 
 
+def send_rollback():
+    # TODO rollback process
+    pass
+
+
 @celery.task(name="payment_delete")
 def delete(self):
     db_session.query(models.User).delete()
@@ -53,7 +58,7 @@ def process(self, order_data: dict[str, Any]):
             models.Payment(id=order.id, user_id=user.id, status="Not enough credit")
         )
         db_session.commit()
-        # TODO rollback process
+        send_rollback()
         return False
     user.credit -= order.total
 
@@ -76,5 +81,5 @@ def rollback(self, order: schemas.Order):
     )
     db_session.add(models.Payment(id=order.id, user_id=user.id, status=order.error))
     db_session.commit()
-    # TODO rollback process
+    send_rollback()
     return True

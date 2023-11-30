@@ -1,14 +1,13 @@
-from db import database, models, schemas, crud
-from redis import Redis
-from rq import Queue
-from db.crud import create
-from fastapi import FastAPI, HTTPException, Depends, status
-from sqlalchemy.orm import Session
-from typing import List
+from typing import Any
+from celery import Celery
+from dotenv import load_dotenv
+from db import schemas, database, models, crud
+from celery.utils.log import get_task_logger
 
-
+load_dotenv()
+celery = Celery("tasks", broker="redis://:your-password@localhost:6379/0")
 models.Base.metadata.create_all(bind=database.engine)
-app = FastAPI()
+logger = get_task_logger(__name__)
 
 
 # Dependency
@@ -20,31 +19,50 @@ def get_db():
         db.close()
 
 
-redis_con = Redis(host="localhost", port=6379)
-task_queue = Queue("task_queue", connection=redis_con)
 db_session = database.SessionLocal()
 
-@app.post("/addItem", response_model=schemas.Item)
-def create_item(item: schemas.Item, db: Session = Depends(get_db)):
-    return crud.create(db=db, model=models.Item, data=item)
 
-@app.get("/items", response_model=List[schemas.Item])
-def create_item(db: Session = Depends(get_db)):
-    return crud.get_all(db=db, model=models.Item)
+def send_rollback(order_data: dict[str, Any]):
+    celery.send_task("payment_rollback", args=[order_data])
+    pass
 
-@app.get("/item/{id}", response_model=schemas.Item)
-def get_item(id:int,db: Session = Depends(get_db)):
-    return crud.get_by_id(db=db, model=models.Item,id=id)
 
-@app.delete("/deleteItem/{id}")
-def delete_item(id: int,db: Session = Depends(get_db)):
-    return crud.delete(db=db, model=models.Item, id=id)
+@celery.task(name="inventory_delete")
+def delete():
+    db_session.query(models.Item).delete()
+    db_session.commit()
+    return True
 
-@app.delete("/deleteItems")
-def create_item(db: Session = Depends(get_db)):
-    return crud.delete_all(db=db, model=models.Item)
 
-@app.put("/updateItem")
-def update_item(item: schemas.Item, db: Session = Depends(get_db)):
-    return crud.update(db=db, model=models.Item, data=item)
+@celery.task(name="inventory_process", bind=True)
+def process(self, order_data: dict[str, Any]):
+    order: schemas.Order = schemas.Order.model_validate(order_data, strict=True)
+    item = db_session.query(models.Item).filter(models.Item.name == order.item).first()
+    if item is None:
+        order.error = "Invalid Item"
+        send_rollback(order.model_dump())
+        return False
+    if int(item.quantity) < order.amount:
+        order.error = "Out of Stock"
+        send_rollback(order.model_dump())
+        return False
 
+    item.quantity -= order.amount
+    db_session.query(models.Item).filter(models.Item.id == item.id).update(
+        schemas.Item.model_validate(item).model_dump()
+    )
+    db_session.commit()
+    return True
+
+
+@celery.task(name="inventory_rollback", bind=True)
+def rollback(self, order: schemas.Order):
+    order: schemas.Order = schemas.Order.model_validate(order_data, strict=True)
+    item = db_session.query(models.Item).filter(models.Item.name == order.item).first()
+    item.quantity += order.amount
+    db_session.query(models.Item).filter(models.Item.id == item.id).update(
+        schemas.Item.model_validate(item).model_dump()
+    )
+    db_session.commit()
+    send_rollback(order.model_dump())
+    return True
