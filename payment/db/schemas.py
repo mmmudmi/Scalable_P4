@@ -8,7 +8,7 @@ class AbstractBase(BaseModel):
 class Payment(AbstractBase):
     user_id: int
     item: str
-    status: str
+    status: str = "Completed"
 
     class Config:
         from_attributes = True
@@ -30,3 +30,4 @@ class Order(AbstractBase):
     amount: int
     total: int
     status: str = "Incomplete"
+    error: str | None = None
