@@ -1,12 +1,13 @@
-from fastapi import FastAPI
-from db import database, models, schemas, crud
-from redis import Redis
-from rq import Queue
-from worker import process
+from typing import Any
 from celery import Celery
-import os
+from dotenv import load_dotenv
+from db import schemas, database, models, crud
+from celery.utils.log import get_task_logger
 
+load_dotenv()
+celery = Celery("tasks", broker="redis://:your-password@localhost:6379/0")
 models.Base.metadata.create_all(bind=database.engine)
+logger = get_task_logger(__name__)
 
 
 # Dependency
@@ -18,38 +19,62 @@ def get_db():
         db.close()
 
 
-app = FastAPI()
 db_session = database.SessionLocal()
 
 
-@app.get("/payment")
-def get_all_payment():
-    return crud.get_all(db_session, models.Payment)
+def get_or_create_user(username: str):
+    user = (
+        db_session.query(models.User).filter(models.User.username == username).first()
+    )
+    if user is not None:
+        return user
+    new_user = models.User(username=username)
+    db_session.add(new_user)
+    db_session.commit()
+    db_session.refresh(new_user)
+    return new_user
 
 
-@app.post("/payment")
-def create_payment(order: schemas.Order):
-    if order.id:
-        return "Can't create payment with specific ID"
-    return process.delay(order.json()).id
-    # return crud.create(db_session, models.Payment, schemas.Payment())
+@celery.task(name="payment_delete")
+def delete(self):
+    db_session.query(models.User).delete()
+    db_session.query(models.Payment).delete()
+    db_session.commit()
+    return True
 
 
-@app.put("/payment")
-def update_payment(payment: schemas.Order):
-    return crud.update(db_session, models.Payment, payment)
+@celery.task(name="payment_process", bind=True)
+def process(self, order_data: dict[str, Any]):
+    print(order_data)
+    order: schemas.Order = schemas.Order.model_validate(order_data, strict=True)
+    user = get_or_create_user(order.user)
+    if int(user.credit) < order.amount:
+        db_session.add(
+            models.Payment(id=order.id, user_id=user.id, status="Not enough credit")
+        )
+        db_session.commit()
+        # TODO rollback process
+        return False
+    user.credit -= order.total
+
+    db_session.query(models.User).filter(models.User.id == user.id).update(
+        schemas.User.model_validate(user).model_dump()
+    )
+    db_session.add(models.Payment(id=order.id, user_id=user.id))
+    db_session.commit()
+    return True
 
 
-@app.delete("/payment")
-def delete_all_payment():
-    return crud.delete_all(db_session, models.Payment)
-
-
-@app.get("/payment/{payment_id}")
-def get_payment(payment_id: int):
-    return crud.get_by_id(db_session, models.Payment, payment_id)
-
-
-@app.delete("/payment/{payment_id}")
-def delete_payment(payment_id: int):
-    return crud.delete(db_session, models.Payment, payment_id)
+@celery.task(name="payment_rollback", bind=True)
+def rollback(self, order: schemas.Order):
+    user = (
+        db_session.query(models.User).filter(models.User.username == order.user).first()
+    )
+    user.credit += order.total
+    db_session.query(models.User).filter(models.User.id == user.id).update(
+        schemas.User.model_validate(user).model_dump()
+    )
+    db_session.add(models.Payment(id=order.id, user_id=user.id, status=order.error))
+    db_session.commit()
+    # TODO rollback process
+    return True

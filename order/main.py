@@ -1,8 +1,6 @@
 from fastapi import FastAPI
 from db import database, models, schemas, crud
-from redis import Redis
-from rq import Queue
-
+from celery import Celery
 
 models.Base.metadata.create_all(bind=database.engine)
 
@@ -17,9 +15,8 @@ def get_db():
 
 
 app = FastAPI()
-redis_con = Redis(host="localhost", port=6379)
-task_queue = Queue("task_queue", connection=redis_con)
 db_session = database.SessionLocal()
+celery = Celery("order_services", broker="redis://:your-password@localhost:6379/0")
 
 
 @app.get("/order")
@@ -31,7 +28,15 @@ def get_all_order():
 def create_order(order: schemas.Order):
     if order.id:
         return "Can't create order with specific ID"
-    return crud.create(db_session, models.Order, order)
+    db_order: models.Order = crud.create(db_session, models.Order, order)
+    order.id = db_order.id
+    celery.send_task(
+        "payment_process",
+        args=[
+            order.model_dump(),
+        ],
+    )
+    return order
 
 
 @app.put("/order")
@@ -41,6 +46,7 @@ def update_order(order: schemas.Order):
 
 @app.delete("/order")
 def delete_all_order():
+    celery.send_task("payment_delete")
     return crud.delete_all(db_session, models.Order)
 
 

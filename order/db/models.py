@@ -12,3 +12,4 @@ class Order(Base):
     amount = Column(Integer, nullable=False)
     total = Column(Integer, nullable=False)
     status = Column(String(60), index=True, nullable=False, default="Incomplete")
+    error = Column(String(60), nullable=True)

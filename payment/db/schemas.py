@@ -16,8 +16,7 @@ class Payment(AbstractBase):
 
 class User(AbstractBase):
     username: str
-    credit: int
-    payments: list[Payment] = []
+    credit: int = 100
 
     class Config:
         from_attributes = True
