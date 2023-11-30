@@ -1,20 +1,21 @@
 CREATE DATABASE IF NOT EXISTS inventory;
 
-CREATE USER 'inventory-username'@'%' IDENTIFIED BY 'inventory-password';
-GRANT ALL PRIVILEGES ON inventory.* TO 'inventory-username'@'%';
+CREATE USER
+    'inventory-username' @'%' IDENTIFIED BY 'inventory-password';
+
+GRANT ALL PRIVILEGES ON inventory.* TO 'inventory-username' @'%';
+
 FLUSH PRIVILEGES;
 
 USE inventory;
 
-CREATE TABLE items
-(
-    id       INT AUTO_INCREMENT PRIMARY KEY,
-    name     VARCHAR(60) NOT NULL,
-    quantity INT NOT NULL,
-    price    DECIMAL(10, 2) NOT NULL,
-    CONSTRAINT ix_items_name UNIQUE (name)
-);
+CREATE TABLE
+    items (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        name VARCHAR(60) NOT NULL,
+        quantity INT NOT NULL,
+        price DECIMAL(10, 2) NOT NULL,
+        CONSTRAINT ix_items_name UNIQUE (name)
+    );
 
-create index ix_items_id
-    on items (id);
-
+create index ix_items_id on items (id);
