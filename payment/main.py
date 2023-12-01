@@ -35,21 +35,25 @@ def get_or_create_user(username: str):
     return new_user
 
 
-def send_rollback():
+def send_rollback(order_data: dict[str, Any]):
     # TODO rollback process
     pass
 
 
+def send_process(order_data: dict[str, Any]):
+    celery.send_task("inventory_process", args=[order_data])
+
+
 @celery.task(name="payment_delete")
-def delete(self):
+def delete():
     db_session.query(models.User).delete()
     db_session.query(models.Payment).delete()
     db_session.commit()
     return True
 
 
-@celery.task(name="payment_process", bind=True)
-def process(self, order_data: dict[str, Any]):
+@celery.task(name="payment_process")
+def process(order_data: dict[str, Any]):
     print(order_data)
     order: schemas.Order = schemas.Order.model_validate(order_data, strict=True)
     user = get_or_create_user(order.user)
@@ -58,7 +62,7 @@ def process(self, order_data: dict[str, Any]):
             models.Payment(id=order.id, user_id=user.id, status="Not enough credit")
         )
         db_session.commit()
-        send_rollback()
+        send_rollback(order_data)
         return False
     user.credit -= order.total
 
@@ -67,11 +71,13 @@ def process(self, order_data: dict[str, Any]):
     )
     db_session.add(models.Payment(id=order.id, user_id=user.id))
     db_session.commit()
+    send_process(order_data)
     return True
 
 
-@celery.task(name="payment_rollback", bind=True)
-def rollback(self, order: schemas.Order):
+@celery.task(name="payment_rollback")
+def rollback(order_data: dict[str, Any]):
+    order: schemas.Order = schemas.Order.model_validate(order_data, strict=True)
     user = (
         db_session.query(models.User).filter(models.User.username == order.user).first()
     )
@@ -81,5 +87,5 @@ def rollback(self, order: schemas.Order):
     )
     db_session.add(models.Payment(id=order.id, user_id=user.id, status=order.error))
     db_session.commit()
-    send_rollback()
+    send_rollback(order_data)
     return True

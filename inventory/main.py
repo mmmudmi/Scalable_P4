@@ -22,6 +22,10 @@ def get_db():
 db_session = database.SessionLocal()
 
 
+def send_process(order_data: dict[str, Any]):
+    celery.send_task("delivery_process", args=[order_data])
+
+
 def send_rollback(order_data: dict[str, Any]):
     celery.send_task("payment_rollback", args=[order_data])
     pass
@@ -34,8 +38,8 @@ def delete():
     return True
 
 
-@celery.task(name="inventory_process", bind=True)
-def process(self, order_data: dict[str, Any]):
+@celery.task(name="inventory_process")
+def process(order_data: dict[str, Any]):
     order: schemas.Order = schemas.Order.model_validate(order_data, strict=True)
     item = db_session.query(models.Item).filter(models.Item.name == order.item).first()
     if item is None:
@@ -52,11 +56,12 @@ def process(self, order_data: dict[str, Any]):
         schemas.Item.model_validate(item).model_dump()
     )
     db_session.commit()
+    send_process(order_data)
     return True
 
 
-@celery.task(name="inventory_rollback", bind=True)
-def rollback(self, order: schemas.Order):
+@celery.task(name="inventory_rollback")
+def rollback(order_data: dict[str, Any]):
     order: schemas.Order = schemas.Order.model_validate(order_data, strict=True)
     item = db_session.query(models.Item).filter(models.Item.name == order.item).first()
     item.quantity += order.amount
@@ -64,5 +69,5 @@ def rollback(self, order: schemas.Order):
         schemas.Item.model_validate(item).model_dump()
     )
     db_session.commit()
-    send_rollback(order.model_dump())
+    send_rollback(order_data)
     return True
