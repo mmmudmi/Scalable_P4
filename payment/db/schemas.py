@@ -7,7 +7,6 @@ class AbstractBase(BaseModel):
 
 class Payment(AbstractBase):
     user_id: int
-    item: str
     status: str = "Completed"
 
     class Config:

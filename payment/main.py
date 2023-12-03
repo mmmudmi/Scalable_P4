@@ -1,8 +1,9 @@
 from typing import Any
 from celery import Celery
 from dotenv import load_dotenv
-from db import schemas, database, models, crud
+from db import schemas, database, models
 from celery.utils.log import get_task_logger
+from kombu import Queue
 
 load_dotenv()
 celery = Celery("tasks", broker="redis://:your-password@localhost:6379/0")
@@ -41,10 +42,10 @@ def send_rollback(order_data: dict[str, Any]):
 
 
 def send_process(order_data: dict[str, Any]):
-    celery.send_task("inventory_process", args=[order_data])
+    celery.send_task("process", args=[order_data], queue="inventory")
 
 
-@celery.task(name="payment_delete")
+@celery.task(name="delete")
 def delete():
     db_session.query(models.User).delete()
     db_session.query(models.Payment).delete()
@@ -52,12 +53,12 @@ def delete():
     return True
 
 
-@celery.task(name="payment_process")
+@celery.task(name="process")
 def process(order_data: dict[str, Any]):
     print(order_data)
     order: schemas.Order = schemas.Order.model_validate(order_data, strict=True)
     user = get_or_create_user(order.user)
-    if int(user.credit) < order.amount:
+    if int(user.credit) < order.total:
         db_session.add(
             models.Payment(id=order.id, user_id=user.id, status="Not enough credit")
         )
@@ -75,7 +76,7 @@ def process(order_data: dict[str, Any]):
     return True
 
 
-@celery.task(name="payment_rollback")
+@celery.task(name="rollback")
 def rollback(order_data: dict[str, Any]):
     order: schemas.Order = schemas.Order.model_validate(order_data, strict=True)
     user = (
@@ -85,7 +86,9 @@ def rollback(order_data: dict[str, Any]):
     db_session.query(models.User).filter(models.User.id == user.id).update(
         schemas.User.model_validate(user).model_dump()
     )
-    db_session.add(models.Payment(id=order.id, user_id=user.id, status=order.error))
+    db_session.query(models.Payment).filter(models.Payment.id == order.id).update(
+        schemas.Payment(id=order.id, user_id=user.id, status=order.error).model_dump()
+    )
     db_session.commit()
     send_rollback(order_data)
     return True

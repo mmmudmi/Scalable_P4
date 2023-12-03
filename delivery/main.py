@@ -1,13 +1,12 @@
 from typing import Any
 from celery import Celery
 from dotenv import load_dotenv
-from db import schemas, database, models, crud
-from celery.utils.log import get_task_logger
+from db import schemas, database, models
+
 
 load_dotenv()
 celery = Celery("tasks", broker="redis://:your-password@localhost:6379/0")
 models.Base.metadata.create_all(bind=database.engine)
-logger = get_task_logger(__name__)
 
 
 # Dependency
@@ -23,7 +22,7 @@ db_session = database.SessionLocal()
 
 
 def send_rollback(order_data: dict[str, Any]):
-    celery.send_task("inventory_rollback", args=[order_data])
+    celery.send_task("rollback", args=[order_data], queue="inventory")
 
 
 def send_process(order_data: dict[str, Any]):
@@ -31,14 +30,14 @@ def send_process(order_data: dict[str, Any]):
     pass
 
 
-@celery.task(name="delivery_delete")
+@celery.task(name="delete")
 def delete():
     db_session.query(models.Delivery).delete()
     db_session.commit()
     return True
 
 
-@celery.task(name="delivery_process")
+@celery.task(name="process")
 def process(order_data: dict[str, Any]):
     order: schemas.Order = schemas.Order.model_validate(order_data, strict=True)
     if "delivery" in order.error:
@@ -56,7 +55,7 @@ def process(order_data: dict[str, Any]):
     return True
 
 
-# @celery.task(name="delivery_rollback")
+# @celery.task(name="rollback")
 # def rollback(order_data: dict[str, Any]):
 #     order: schemas.Order = schemas.Order.model_validate(order_data, strict=True)
 #     user = (

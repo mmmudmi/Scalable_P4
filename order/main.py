@@ -30,12 +30,7 @@ def create_order(order: schemas.Order):
         return "Can't create order with specific ID"
     db_order: models.Order = crud.create(db_session, models.Order, order)
     order.id = db_order.id
-    celery.send_task(
-        "payment_process",
-        args=[
-            order.model_dump(),
-        ],
-    )
+    celery.send_task("process", args=[order.model_dump()], queue="payment")
     return order
 
 
@@ -46,7 +41,7 @@ def update_order(order: schemas.Order):
 
 @app.delete("/order")
 def delete_all_order():
-    celery.send_task("payment_delete")
+    celery.send_task("payment.delete")
     return crud.delete_all(db_session, models.Order)
 
 
