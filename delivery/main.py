@@ -1,9 +1,11 @@
+import os
 from typing import Any
+
+import requests
 from celery import Celery
 from dotenv import load_dotenv
-from db import schemas, database, models
-import os
 
+from db import schemas, database, models
 
 load_dotenv()
 celery = Celery(
@@ -30,8 +32,7 @@ def send_rollback(order_data: dict[str, Any]):
 
 
 def send_process(order_data: dict[str, Any]):
-    # TODO update order
-    pass
+    requests.put("http://order_service:80/order", json=order_data)
 
 
 @celery.task(name="delete")
@@ -44,7 +45,7 @@ def delete():
 @celery.task(name="process")
 def process(order_data: dict[str, Any]):
     order: schemas.Order = schemas.Order.model_validate(order_data, strict=True)
-    if "delivery" in order.error:
+    if order.error is not None and "delivery" in order.error:
         db_session.add(
             models.Delivery(id=order.id, username=order.user, status=order.error)
         )
@@ -56,7 +57,8 @@ def process(order_data: dict[str, Any]):
         models.Delivery(id=order.id, username=order.user, status="Completed")
     )
     db_session.commit()
-    send_process(order_data)
+    order.status = "Completed"
+    send_process(order.model_dump())
     return True
 
 

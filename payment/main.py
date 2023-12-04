@@ -41,7 +41,7 @@ def get_or_create_user(username: str):
 
 
 def send_rollback(order_data: dict[str, Any]):
-    requests.put("order_service:8000/order", json=order_data)
+    requests.put("http://order_service:80/order", json=order_data)
 
 
 def send_process(order_data: dict[str, Any]):

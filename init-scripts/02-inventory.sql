@@ -19,3 +19,8 @@ CREATE TABLE
     );
 
 create index ix_items_id on items (id);
+
+
+INSERT INTO
+    items (name, quantity, price)
+VALUES ('scalable credit', 100, 19.99);
