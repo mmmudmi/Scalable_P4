@@ -8,7 +8,6 @@ class AbstractBase(BaseModel):
 class Item(AbstractBase):
     name: str
     quantity: int
-    price: float
 
     class Config:
         from_attributes = True
