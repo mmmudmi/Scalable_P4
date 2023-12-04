@@ -1,6 +1,7 @@
 from fastapi import FastAPI
 from db import database, models, schemas, crud
 from celery import Celery
+import os
 
 models.Base.metadata.create_all(bind=database.engine)
 
@@ -16,7 +17,10 @@ def get_db():
 
 app = FastAPI()
 db_session = database.SessionLocal()
-celery = Celery("order_services", broker="redis://:your-password@localhost:6379/0")
+celery = Celery(
+    "tasks",
+    broker=os.getenv("CELERY_BROKER", "redis://:your-password@localhost:6379/0"),
+)
 
 
 @app.get("/order")

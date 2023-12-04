@@ -3,9 +3,13 @@ from celery import Celery
 from dotenv import load_dotenv
 from db import schemas, database, models
 from celery.utils.log import get_task_logger
+import os
 
 load_dotenv()
-celery = Celery("tasks", broker="redis://:your-password@localhost:6379/0")
+celery = Celery(
+    "tasks",
+    broker=os.getenv("CELERY_BROKER", "redis://:your-password@localhost:6379/0"),
+)
 models.Base.metadata.create_all(bind=database.engine)
 logger = get_task_logger(__name__)
 

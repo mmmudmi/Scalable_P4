@@ -16,22 +16,49 @@ services:
       MYSQL_USER: admin
       MYSQL_ROOT_PASSWORD: your-root-password
     ports:
-      - "3307:3306"
+      - "3306:3306"
     volumes:
       - ./init-scripts:/docker-entrypoint-initdb.d
     networks:
       - back-office
-  # order_service:
-  #   image: order_service
-  #   build:
-  #     dockerfile: ./order/Dockerfile
-  #   depends_on:
-  #     - database
-  #     - redis
-  #   ports:
-  #     - "8000:8000"
-  #   networks:
-  #     - back-office
+  order_service:
+    image: order_service
+    build:
+      dockerfile: ./order/Dockerfile
+    depends_on:
+      - database
+      - redis
+    ports:
+      - "8000:8000"
+    networks:
+      - back-office
+  payment_service:
+    image: payment_service
+    build:
+      dockerfile: ./payment/Dockerfile
+    depends_on:
+      - database
+      - redis
+    networks:
+      - back-office
+  inventory_service:
+    image: inventory_service
+    build:
+      dockerfile: ./inventory/Dockerfile
+    depends_on:
+      - database
+      - redis
+    networks:
+      - back-office
+  delivery_service:
+    image: delivery_service
+    build:
+      dockerfile: ./delivery/Dockerfile
+    depends_on:
+      - database
+      - redis
+    networks:
+      - back-office
 
 networks:
   back-office:

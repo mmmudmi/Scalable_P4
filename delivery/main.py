@@ -2,10 +2,14 @@ from typing import Any
 from celery import Celery
 from dotenv import load_dotenv
 from db import schemas, database, models
+import os
 
 
 load_dotenv()
-celery = Celery("tasks", broker="redis://:your-password@localhost:6379/0")
+celery = Celery(
+    "tasks",
+    broker=os.getenv("CELERY_BROKER", "redis://:your-password@localhost:6379/0"),
+)
 models.Base.metadata.create_all(bind=database.engine)
 
 
@@ -45,7 +49,8 @@ def process(order_data: dict[str, Any]):
             models.Delivery(id=order.id, username=order.user, status=order.error)
         )
         db_session.commit()
-        send_rollback(order_data)
+        order.status = "delivery"
+        send_rollback(order.model_dump())
         return False
     db_session.add(
         models.Delivery(id=order.id, username=order.user, status="Completed")

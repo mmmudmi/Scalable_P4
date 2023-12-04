@@ -3,10 +3,14 @@ from celery import Celery
 from dotenv import load_dotenv
 from db import schemas, database, models
 from celery.utils.log import get_task_logger
-from kombu import Queue
+import requests
+import os
 
 load_dotenv()
-celery = Celery("tasks", broker="redis://:your-password@localhost:6379/0")
+celery = Celery(
+    "tasks",
+    broker=os.getenv("CELERY_BROKER", "redis://:your-password@localhost:6379/0"),
+)
 models.Base.metadata.create_all(bind=database.engine)
 logger = get_task_logger(__name__)
 
@@ -37,8 +41,7 @@ def get_or_create_user(username: str):
 
 
 def send_rollback(order_data: dict[str, Any]):
-    # TODO rollback process
-    pass
+    requests.put("order_service:8000/order", json=order_data)
 
 
 def send_process(order_data: dict[str, Any]):
@@ -63,7 +66,8 @@ def process(order_data: dict[str, Any]):
             models.Payment(id=order.id, user_id=user.id, status="Not enough credit")
         )
         db_session.commit()
-        send_rollback(order_data)
+        order.status = "Not enough credit"
+        send_rollback(order.model_dump())
         return False
     user.credit -= order.total
 
