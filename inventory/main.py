@@ -1,9 +1,11 @@
-from typing import Any
-from celery import Celery
-from dotenv import load_dotenv
-from db import schemas, database, models
-from celery.utils.log import get_task_logger
 import os
+from typing import Any
+
+from celery import Celery
+from celery.utils.log import get_task_logger
+from dotenv import load_dotenv
+
+from db import schemas, database, models
 
 load_dotenv()
 celery = Celery(
@@ -32,12 +34,12 @@ def send_process(order_data: dict[str, Any]):
 
 def send_rollback(order_data: dict[str, Any]):
     celery.send_task("rollback", args=[order_data], queue="payment")
-    pass
 
 
 @celery.task(name="delete")
 def delete():
     db_session.query(models.Item).delete()
+    db_session.add(models.Item(name="scalable credit", quantity=50))
     db_session.commit()
     return True
 
@@ -47,11 +49,11 @@ def process(order_data: dict[str, Any]):
     order: schemas.Order = schemas.Order.model_validate(order_data, strict=True)
     item = db_session.query(models.Item).filter(models.Item.name == order.item).first()
     if item is None:
-        order.error = "Invalid Item"
+        order.status = "Invalid Item"
         send_rollback(order.model_dump())
         return "Invalid Item"
     if int(item.quantity) < order.amount:
-        order.error = "Out of Stock"
+        order.status = "Out of Stock"
         send_rollback(order.model_dump())
         return "Out of Stock"
 

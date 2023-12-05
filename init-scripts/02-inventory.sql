@@ -21,4 +21,4 @@ create index ix_items_id on items (id);
 
 INSERT INTO
     items (name, quantity)
-VALUES ('scalable credit', 100);
+VALUES ('scalable credit', 50);

@@ -50,7 +50,7 @@ def process(order_data: dict[str, Any]):
             models.Delivery(id=order.id, username=order.user, status=order.error)
         )
         db_session.commit()
-        order.status = "delivery"
+        order.status = "Can't delivery"
         send_rollback(order.model_dump())
         return False
     db_session.add(

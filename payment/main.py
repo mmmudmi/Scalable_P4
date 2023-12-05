@@ -1,10 +1,11 @@
+import os
 from typing import Any
+
+import requests
 from celery import Celery
 from dotenv import load_dotenv
+
 from db import schemas, database, models
-from celery.utils.log import get_task_logger
-import requests
-import os
 
 load_dotenv()
 celery = Celery(
@@ -12,7 +13,6 @@ celery = Celery(
     broker=os.getenv("CELERY_BROKER", "redis://:your-password@localhost:6379/0"),
 )
 models.Base.metadata.create_all(bind=database.engine)
-logger = get_task_logger(__name__)
 
 
 # Dependency
@@ -91,7 +91,7 @@ def rollback(order_data: dict[str, Any]):
         schemas.User.model_validate(user).model_dump()
     )
     db_session.query(models.Payment).filter(models.Payment.id == order.id).update(
-        schemas.Payment(id=order.id, user_id=user.id, status=order.error).model_dump()
+        schemas.Payment(id=order.id, user_id=user.id, status=order.status).model_dump()
     )
     db_session.commit()
     send_rollback(order_data)
