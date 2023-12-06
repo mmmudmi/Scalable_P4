@@ -4,8 +4,11 @@ from typing import Any
 import requests
 from celery import Celery
 from dotenv import load_dotenv
+from opentelemetry import trace
 
 from db import schemas, database, models
+
+tracer = trace.get_tracer(__name__)
 
 load_dotenv()
 celery = Celery(
@@ -58,41 +61,43 @@ def delete():
 
 @celery.task(name="process")
 def process(order_data: dict[str, Any]):
-    print(order_data)
-    order: schemas.Order = schemas.Order.model_validate(order_data, strict=True)
-    user = get_or_create_user(order.user)
-    if int(user.credit) < order.total:
-        db_session.add(
-            models.Payment(id=order.id, user_id=user.id, status="Not enough credit")
-        )
-        db_session.commit()
-        order.status = "Not enough credit"
-        send_rollback(order.model_dump())
-        return False
-    user.credit -= order.total
+    with tracer.start_as_current_span("paymentSpan"):
+        print(order_data)
+        order: schemas.Order = schemas.Order.model_validate(order_data, strict=True)
+        user = get_or_create_user(order.user)
+        if int(user.credit) < order.total:
+            db_session.add(
+                models.Payment(id=order.id, user_id=user.id, status="Not enough credit")
+            )
+            db_session.commit()
+            order.status = "Not enough credit"
+            send_rollback(order.model_dump())
+            return False
+        user.credit -= order.total
 
-    db_session.query(models.User).filter(models.User.id == user.id).update(
-        schemas.User.model_validate(user).model_dump()
-    )
-    db_session.add(models.Payment(id=order.id, user_id=user.id))
-    db_session.commit()
-    send_process(order_data)
-    return True
+        db_session.query(models.User).filter(models.User.id == user.id).update(
+            schemas.User.model_validate(user).model_dump()
+        )
+        db_session.add(models.Payment(id=order.id, user_id=user.id))
+        db_session.commit()
+        send_process(order_data)
+        return True
 
 
 @celery.task(name="rollback")
 def rollback(order_data: dict[str, Any]):
-    order: schemas.Order = schemas.Order.model_validate(order_data, strict=True)
-    user = (
-        db_session.query(models.User).filter(models.User.username == order.user).first()
-    )
-    user.credit += order.total
-    db_session.query(models.User).filter(models.User.id == user.id).update(
-        schemas.User.model_validate(user).model_dump()
-    )
-    db_session.query(models.Payment).filter(models.Payment.id == order.id).update(
-        schemas.Payment(id=order.id, user_id=user.id, status=order.status).model_dump()
-    )
-    db_session.commit()
-    send_rollback(order_data)
-    return True
+    with tracer.start_as_current_span("paymentRollBackSpan"):
+        order: schemas.Order = schemas.Order.model_validate(order_data, strict=True)
+        user = (
+            db_session.query(models.User).filter(models.User.username == order.user).first()
+        )
+        user.credit += order.total
+        db_session.query(models.User).filter(models.User.id == user.id).update(
+            schemas.User.model_validate(user).model_dump()
+        )
+        db_session.query(models.Payment).filter(models.Payment.id == order.id).update(
+            schemas.Payment(id=order.id, user_id=user.id, status=order.status).model_dump()
+        )
+        db_session.commit()
+        send_rollback(order_data)
+        return True

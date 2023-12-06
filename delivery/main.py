@@ -4,8 +4,10 @@ from typing import Any
 import requests
 from celery import Celery
 from dotenv import load_dotenv
+from opentelemetry import trace
 
 from db import schemas, database, models
+tracer = trace.get_tracer(__name__)
 
 load_dotenv()
 celery = Celery(
@@ -44,35 +46,37 @@ def delete():
 
 @celery.task(name="process")
 def process(order_data: dict[str, Any]):
-    order: schemas.Order = schemas.Order.model_validate(order_data, strict=True)
-    if order.error is not None and "delivery" in order.error:
-        order.status = "Can't delivery"
+    with tracer.start_as_current_span("deliverySpan"):
+        order: schemas.Order = schemas.Order.model_validate(order_data, strict=True)
+        if order.error is not None and "delivery" in order.error:
+            order.status = "Can't delivery"
+            db_session.add(
+                models.Delivery(id=order.id, username=order.user, status=order.error)
+            )
+            db_session.commit()
+            send_rollback(order.model_dump())
+            return False
         db_session.add(
-            models.Delivery(id=order.id, username=order.user, status=order.status)
+            models.Delivery(id=order.id, username=order.user, status="Completed")
         )
         db_session.commit()
-        send_rollback(order.model_dump())
-        return False
-    db_session.add(
-        models.Delivery(id=order.id, username=order.user, status="Completed")
-    )
-    db_session.commit()
-    order.status = "Completed"
-    send_process(order.model_dump())
-    return True
+        order.status = "Completed"
+        send_process(order.model_dump())
+        return True
 
 
 # @celery.task(name="rollback")
 # def rollback(order_data: dict[str, Any]):
-#     order: schemas.Order = schemas.Order.model_validate(order_data, strict=True)
-#     user = (
-#         db_session.query(models.User).filter(models.User.username == order.user).first()
-#     )
-#     user.credit += order.total
-#     db_session.query(models.User).filter(models.User.id == user.id).update(
-#         schemas.User.model_validate(user).model_dump()
-#     )
-#     db_session.add(models.Payment(id=order.id, user_id=user.id, status=order.error))
-#     db_session.commit()
-#     send_rollback(order_data)
-#     return True
+#     with tracer.start_as_current_span("deliveryRollBackSpan"):
+#         order: schemas.Order = schemas.Order.model_validate(order_data, strict=True)
+#         user = (
+#             db_session.query(models.User).filter(models.User.username == order.user).first()
+#         )
+#         user.credit += order.total
+#         db_session.query(models.User).filter(models.User.id == user.id).update(
+#             schemas.User.model_validate(user).model_dump()
+#         )
+#         db_session.add(models.Payment(id=order.id, user_id=user.id, status=order.error))
+#         db_session.commit()
+#         send_rollback(order_data)
+#         return True
