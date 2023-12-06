@@ -16,8 +16,8 @@ from opentelemetry.instrumentation.celery import CeleryInstrumentor
 from opentelemetry.sdk.metrics import MeterProvider
 from opentelemetry.sdk.metrics.export import PeriodicExportingMetricReader
 from opentelemetry.exporter.otlp.proto.grpc.metric_exporter import OTLPMetricExporter
-from prometheus_client import Counter, start_http_server, generate_latest
-
+# from prometheus_client import Counter, start_http_server, generate_latest
+import prometheus_client
 from db import schemas, database, models
 tracer = trace.get_tracer(__name__)
 
@@ -51,16 +51,16 @@ trace.set_tracer_provider(trace_provider)
 tracer = trace.get_tracer(__name__)
 
 # METRIC
-start_http_server(50)
+prometheus_client.start_http_server(50)
 metric_reader = PeriodicExportingMetricReader(OTLPMetricExporter(endpoint="otel-collector:4317", insecure=True))
 metric_provider = MeterProvider(resource=Resource(attributes={SERVICE_NAME: "delivery-service"}), metric_readers=[metric_reader])
 metrics.set_meter_provider(metric_provider)
 meter = metrics.get_meter(__name__)
-delivery_count = Counter(
+delivery_count = prometheus_client.Counter(
     "delivery_count",
     "The number of deliveries being made"
 )
-delivery_rollback_count = Counter(
+delivery_rollback_count = prometheus_client.Counter(
     "delivery_rollback_count",
     "The number of deliveries getting rolled back"
 )
@@ -76,7 +76,7 @@ def send_process(order_data: dict[str, Any]):
 def get_metrics():
     return Response(
         media_type="text/plain",
-        content=generate_latest()
+        content=prometheus_client.generate_latest()
     )
 
 @celery.task(name="delete")
@@ -89,6 +89,7 @@ def delete():
 @celery.task(name="process")
 def process(order_data: dict[str, Any]):
     with tracer.start_as_current_span("delivery-span"):
+        delivery_count.inc(1)
         order: schemas.Order = schemas.Order.model_validate(order_data, strict=True)
         if order.error is not None and "delivery" in order.error:
             order.status = "Can't delivery"
@@ -110,6 +111,7 @@ def process(order_data: dict[str, Any]):
 # @celery.task(name="rollback")
 # def rollback(order_data: dict[str, Any]):
 #     with tracer.start_as_current_span("delivery-rollback-span"):
+#         delivery_rollback_count.inc(1)
 #         order: schemas.Order = schemas.Order.model_validate(order_data, strict=True)
 #         user = (
 #             db_session.query(models.User).filter(models.User.username == order.user).first()

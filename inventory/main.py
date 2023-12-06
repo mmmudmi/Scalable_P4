@@ -16,8 +16,8 @@ from opentelemetry.instrumentation.celery import CeleryInstrumentor
 from opentelemetry.sdk.metrics import MeterProvider
 from opentelemetry.sdk.metrics.export import PeriodicExportingMetricReader
 from opentelemetry.exporter.otlp.proto.grpc.metric_exporter import OTLPMetricExporter
-from prometheus_client import Counter, start_http_server, generate_latest
-
+# from prometheus_client import Counter, start_http_server, generate_latest
+import prometheus_client
 from db import schemas, database, models
 tracer = trace.get_tracer(__name__)
 
@@ -52,16 +52,16 @@ trace.set_tracer_provider(trace_provider)
 tracer = trace.get_tracer(__name__)
 
 # METRIC
-start_http_server(60)
+prometheus_client.start_http_server(60)
 metric_reader = PeriodicExportingMetricReader(OTLPMetricExporter(endpoint="otel-collector:4317", insecure=True))
 metric_provider = MeterProvider(resource=Resource(attributes={SERVICE_NAME: "inventory-service"}), metric_readers=[metric_reader])
 metrics.set_meter_provider(metric_provider)
 meter = metrics.get_meter(__name__)
-inventory_count = Counter(
+inventory_count = prometheus_client.Counter(
     "inventory_count",
     "The number of times that inventory is getting deducted"
 )
-inventory_rollback_count = Counter(
+inventory_rollback_count = prometheus_client.Counter(
     "inventory_rollback_count",
     "The number of times that inventory is getting added back"
 )
@@ -69,7 +69,7 @@ inventory_rollback_count = Counter(
 def get_metrics():
     return Response(
         media_type="text/plain",
-        content=generate_latest()
+        content=prometheus_client.generate_latest()
     )
 
 def send_process(order_data: dict[str, Any]):

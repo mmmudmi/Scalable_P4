@@ -16,7 +16,8 @@ from opentelemetry.instrumentation.celery import CeleryInstrumentor
 from opentelemetry.sdk.metrics import MeterProvider
 from opentelemetry.sdk.metrics.export import PeriodicExportingMetricReader
 from opentelemetry.exporter.otlp.proto.grpc.metric_exporter import OTLPMetricExporter
-from prometheus_client import Counter, start_http_server, generate_latest
+# from prometheus_client import Counter, start_http_server, generate_latest
+import prometheus_client
 
 from db import schemas, database, models
 
@@ -52,16 +53,16 @@ trace.set_tracer_provider(trace_provider)
 tracer = trace.get_tracer(__name__)
 
 # METRIC
-start_http_server(70)
+prometheus_client.start_http_server(70)
 metric_reader = PeriodicExportingMetricReader(OTLPMetricExporter(endpoint="otel-collector:4317", insecure=True))
 metric_provider = MeterProvider(resource=Resource(attributes={SERVICE_NAME: "payment-service"}), metric_readers=[metric_reader])
 metrics.set_meter_provider(metric_provider)
 meter = metrics.get_meter(__name__)
-payment_count = Counter(
+payment_count = prometheus_client.Counter(
     "payment_count",
     "The number of payments being made"
 )
-payment_rollback_count = Counter(
+payment_rollback_count = prometheus_client.Counter(
     "payment_rollback_count",
     "The number of payments getting rolled back"
 )
@@ -69,7 +70,7 @@ payment_rollback_count = Counter(
 def get_metrics():
     return Response(
         media_type="text/plain",
-        content=generate_latest()
+        content=prometheus_client.generate_latest()
     )
 
 def get_or_create_user(username: str):
