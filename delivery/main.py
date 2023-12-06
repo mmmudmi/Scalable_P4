@@ -46,11 +46,11 @@ def delete():
 def process(order_data: dict[str, Any]):
     order: schemas.Order = schemas.Order.model_validate(order_data, strict=True)
     if order.error is not None and "delivery" in order.error:
+        order.status = "Can't delivery"
         db_session.add(
-            models.Delivery(id=order.id, username=order.user, status=order.error)
+            models.Delivery(id=order.id, username=order.user, status=order.status)
         )
         db_session.commit()
-        order.status = "Can't delivery"
         send_rollback(order.model_dump())
         return False
     db_session.add(
