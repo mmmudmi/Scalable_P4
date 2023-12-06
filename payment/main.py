@@ -5,6 +5,14 @@ import requests
 from celery import Celery
 from dotenv import load_dotenv
 from opentelemetry import trace
+from opentelemetry.exporter.jaeger.thrift import JaegerExporter
+from opentelemetry.sdk.resources import SERVICE_NAME, Resource
+from opentelemetry.sdk.trace import TracerProvider
+from opentelemetry.sdk.trace.export import BatchSpanProcessor
+from opentelemetry import trace
+from opentelemetry.sdk.resources import SERVICE_NAME, Resource
+from opentelemetry.exporter.otlp.proto.grpc.trace_exporter import OTLPSpanExporter
+from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
 
 from db import schemas, database, models
 
@@ -26,8 +34,15 @@ def get_db():
     finally:
         db.close()
 
-
 db_session = database.SessionLocal()
+
+
+# TRACE
+trace_provider = TracerProvider(resource=Resource(attributes={SERVICE_NAME: "payment-service"}))
+otlp_trace_exporter = OTLPSpanExporter(endpoint="otel-collector:4317", insecure=True)
+trace_provider.add_span_processor(BatchSpanProcessor(otlp_trace_exporter))
+trace.set_tracer_provider(trace_provider)
+tracer = trace.get_tracer(__name__)
 
 
 def get_or_create_user(username: str):
@@ -61,7 +76,7 @@ def delete():
 
 @celery.task(name="process")
 def process(order_data: dict[str, Any]):
-    with tracer.start_as_current_span("paymentSpan"):
+    with tracer.start_as_current_span("payment-span"):
         print(order_data)
         order: schemas.Order = schemas.Order.model_validate(order_data, strict=True)
         user = get_or_create_user(order.user)
@@ -86,7 +101,7 @@ def process(order_data: dict[str, Any]):
 
 @celery.task(name="rollback")
 def rollback(order_data: dict[str, Any]):
-    with tracer.start_as_current_span("paymentRollBackSpan"):
+    with tracer.start_as_current_span("payment-rollback-span"):
         order: schemas.Order = schemas.Order.model_validate(order_data, strict=True)
         user = (
             db_session.query(models.User).filter(models.User.username == order.user).first()
