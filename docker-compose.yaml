@@ -32,6 +32,7 @@ services:
       - database
       - redis
       - jaeger
+      - prometheus
     ports:
       - "80:80"
     networks:
@@ -47,6 +48,7 @@ services:
       - database
       - redis
       - jaeger
+      - prometheus
     networks:
       - back-office
   inventory_service:
@@ -59,6 +61,8 @@ services:
     depends_on:
       - database
       - redis
+      - jaeger
+      - prometheus
     networks:
       - back-office
   delivery_service:
@@ -72,9 +76,9 @@ services:
       - database
       - redis
       - jaeger
+      - prometheus
     networks:
       - back-office
-
   jaeger:
     image: jaegertracing/all-in-one:latest
     restart: always
@@ -96,6 +100,19 @@ services:
       - "9464:9464"
     depends_on:
       - jaeger
+      - prometheus
+    networks:
+      - back-office
+
+  prometheus:
+    image: prom/prometheus:latest
+    restart: always
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml
+    # command: 
+    #   - '--config.file=/etc/prometheus/prometheus.yml'
+    ports:
+      - "9090:9090"
     networks:
       - back-office
 

@@ -4,16 +4,18 @@ from typing import Any
 import requests
 from celery import Celery
 from dotenv import load_dotenv
-from opentelemetry import trace
 from opentelemetry.exporter.jaeger.thrift import JaegerExporter
 from opentelemetry.sdk.resources import SERVICE_NAME, Resource
 from opentelemetry.sdk.trace import TracerProvider
 from opentelemetry.sdk.trace.export import BatchSpanProcessor
-from opentelemetry import trace
-from opentelemetry.sdk.resources import SERVICE_NAME, Resource
+from opentelemetry import trace, metrics
 from opentelemetry.exporter.otlp.proto.grpc.trace_exporter import OTLPSpanExporter
 from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
 from opentelemetry.instrumentation.celery import CeleryInstrumentor
+from opentelemetry.sdk.metrics import MeterProvider
+from opentelemetry.sdk.metrics.export import PeriodicExportingMetricReader
+from opentelemetry.exporter.otlp.proto.grpc.metric_exporter import OTLPMetricExporter
+import prometheus_client
 
 from db import schemas, database, models
 
@@ -46,6 +48,19 @@ trace_provider.add_span_processor(BatchSpanProcessor(otlp_trace_exporter))
 trace.set_tracer_provider(trace_provider)
 tracer = trace.get_tracer(__name__)
 
+# METRIC
+metric_reader = PeriodicExportingMetricReader(OTLPMetricExporter(endpoint="otel-collector:4317", insecure=True))
+metric_provider = MeterProvider(resource=Resource(attributes={SERVICE_NAME: "payment-service"}), metric_readers=[metric_reader])
+metrics.set_meter_provider(metric_provider)
+meter = metrics.get_meter(__name__)
+payment_count = prometheus_client.Counter(
+    "payment_count",
+    "The number of payments being made"
+)
+payment_rollback_count = prometheus_client.Counter(
+    "payment_rollback_count",
+    "The number of payments getting rolled back"
+)
 
 def get_or_create_user(username: str):
     user = (
@@ -79,6 +94,7 @@ def delete():
 @celery.task(name="process")
 def process(order_data: dict[str, Any]):
     with tracer.start_as_current_span("payment-span"):
+        payment_count.inc(1)
         print(order_data)
         order: schemas.Order = schemas.Order.model_validate(order_data, strict=True)
         user = get_or_create_user(order.user)
@@ -104,6 +120,7 @@ def process(order_data: dict[str, Any]):
 @celery.task(name="rollback")
 def rollback(order_data: dict[str, Any]):
     with tracer.start_as_current_span("payment-rollback-span"):
+        payment_rollback_count.inc(1)
         order: schemas.Order = schemas.Order.model_validate(order_data, strict=True)
         user = (
             db_session.query(models.User).filter(models.User.username == order.user).first()

@@ -4,16 +4,18 @@ from typing import Any
 from celery import Celery
 from celery.utils.log import get_task_logger
 from dotenv import load_dotenv
-from opentelemetry import trace
 from opentelemetry.exporter.jaeger.thrift import JaegerExporter
 from opentelemetry.sdk.resources import SERVICE_NAME, Resource
 from opentelemetry.sdk.trace import TracerProvider
 from opentelemetry.sdk.trace.export import BatchSpanProcessor
-from opentelemetry import trace
-from opentelemetry.sdk.resources import SERVICE_NAME, Resource
+from opentelemetry import trace, metrics
 from opentelemetry.exporter.otlp.proto.grpc.trace_exporter import OTLPSpanExporter
 from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
 from opentelemetry.instrumentation.celery import CeleryInstrumentor
+from opentelemetry.sdk.metrics import MeterProvider
+from opentelemetry.sdk.metrics.export import PeriodicExportingMetricReader
+from opentelemetry.exporter.otlp.proto.grpc.metric_exporter import OTLPMetricExporter
+import prometheus_client
 
 from db import schemas, database, models
 tracer = trace.get_tracer(__name__)
@@ -47,6 +49,20 @@ trace_provider.add_span_processor(BatchSpanProcessor(otlp_trace_exporter))
 trace.set_tracer_provider(trace_provider)
 tracer = trace.get_tracer(__name__)
 
+# METRIC
+metric_reader = PeriodicExportingMetricReader(OTLPMetricExporter(endpoint="otel-collector:4317", insecure=True))
+metric_provider = MeterProvider(resource=Resource(attributes={SERVICE_NAME: "inventory-service"}), metric_readers=[metric_reader])
+metrics.set_meter_provider(metric_provider)
+meter = metrics.get_meter(__name__)
+inventory_count = prometheus_client.Counter(
+    "inventory_count",
+    "The number of times that inventory is getting deducted"
+)
+inventory_rollback_count = prometheus_client.Counter(
+    "inventory_rollback_count",
+    "The number of times that inventory is getting added back"
+)
+
 def send_process(order_data: dict[str, Any]):
     celery.send_task("process", args=[order_data], queue="delivery")
 
@@ -66,6 +82,7 @@ def delete():
 @celery.task(name="process")
 def process(order_data: dict[str, Any]):
     with tracer.start_as_current_span("inventory-span"):
+        inventory_count.inc(1)
         order: schemas.Order = schemas.Order.model_validate(order_data, strict=True)
         item = db_session.query(models.Item).filter(models.Item.name == order.item).first()
         if item is None:
@@ -89,6 +106,7 @@ def process(order_data: dict[str, Any]):
 @celery.task(name="rollback")
 def rollback(order_data: dict[str, Any]):
     with tracer.start_as_current_span("inventory-rollback-span"):
+        inventory_rollback_count.inc(1)
         order: schemas.Order = schemas.Order.model_validate(order_data, strict=True)
         item = db_session.query(models.Item).filter(models.Item.name == order.item).first()
         item.quantity += order.amount
