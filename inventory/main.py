@@ -1,5 +1,6 @@
 import os
 from typing import Any
+from fastapi import FastAPI, Response
 
 from celery import Celery
 from celery.utils.log import get_task_logger
@@ -15,7 +16,7 @@ from opentelemetry.instrumentation.celery import CeleryInstrumentor
 from opentelemetry.sdk.metrics import MeterProvider
 from opentelemetry.sdk.metrics.export import PeriodicExportingMetricReader
 from opentelemetry.exporter.otlp.proto.grpc.metric_exporter import OTLPMetricExporter
-import prometheus_client
+from prometheus_client import Counter, start_http_server, generate_latest
 
 from db import schemas, database, models
 tracer = trace.get_tracer(__name__)
@@ -29,7 +30,8 @@ models.Base.metadata.create_all(bind=database.engine)
 CeleryInstrumentor().instrument()
 
 logger = get_task_logger(__name__)
-
+app = FastAPI()
+FastAPIInstrumentor.instrument_app(app)
 
 # Dependency
 def get_db():
@@ -50,18 +52,25 @@ trace.set_tracer_provider(trace_provider)
 tracer = trace.get_tracer(__name__)
 
 # METRIC
+start_http_server(60)
 metric_reader = PeriodicExportingMetricReader(OTLPMetricExporter(endpoint="otel-collector:4317", insecure=True))
 metric_provider = MeterProvider(resource=Resource(attributes={SERVICE_NAME: "inventory-service"}), metric_readers=[metric_reader])
 metrics.set_meter_provider(metric_provider)
 meter = metrics.get_meter(__name__)
-inventory_count = prometheus_client.Counter(
+inventory_count = Counter(
     "inventory_count",
     "The number of times that inventory is getting deducted"
 )
-inventory_rollback_count = prometheus_client.Counter(
+inventory_rollback_count = Counter(
     "inventory_rollback_count",
     "The number of times that inventory is getting added back"
 )
+@app.get("/metrics")
+def get_metrics():
+    return Response(
+        media_type="text/plain",
+        content=generate_latest()
+    )
 
 def send_process(order_data: dict[str, Any]):
     celery.send_task("process", args=[order_data], queue="delivery")

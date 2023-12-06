@@ -16,12 +16,12 @@ scrape_configs:
 
   - job_name: "payment_service"
     static_configs:
-      - targets: ["payment_service"]
+      - targets: ["payment_service:70"]
 
   - job_name: "inventory_service"
     static_configs:
-      - targets: ["inventory_service"]
+      - targets: ["inventory_service:60"]
 
   - job_name: "delivery_service"
     static_configs:
-      - targets: ["delivery_service"]
+      - targets: ["delivery_service:50"]

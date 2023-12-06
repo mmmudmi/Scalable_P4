@@ -13,7 +13,8 @@ from opentelemetry.instrumentation.celery import CeleryInstrumentor
 from opentelemetry.sdk.metrics import MeterProvider
 from opentelemetry.sdk.metrics.export import PeriodicExportingMetricReader
 from opentelemetry.exporter.otlp.proto.grpc.metric_exporter import OTLPMetricExporter
-import prometheus_client
+from prometheus_client import Counter, generate_latest
+
 import time
 
 
@@ -49,17 +50,22 @@ metric_reader = PeriodicExportingMetricReader(OTLPMetricExporter(endpoint="otel-
 metric_provider = MeterProvider(resource=Resource(attributes={SERVICE_NAME: "order-service"}), metric_readers=[metric_reader])
 metrics.set_meter_provider(metric_provider)
 meter = metrics.get_meter(__name__)
-order_count = prometheus_client.Counter(
+order_count = Counter(
     "order_count",
     "The number of orders being made"
 )
+# order_count = meter.create_counter(
+#     "order_count",
+#     description="The number of orders being made",
+#     unit="1",
+# )
 FastAPIInstrumentor.instrument_app(app)
 
 @app.get("/metrics")
 def get_metrics():
     return Response(
         media_type="text/plain",
-        content=prometheus_client.generate_latest()
+        content=generate_latest()
     )
 
 
@@ -79,8 +85,8 @@ def get_all_order():
 @app.post("/order")
 def create_order(order: schemas.Order):
     with tracer.start_as_current_span("order-span"):
-        # order_count.add(1)
-        order_count.inc(1)
+        order_count.add(1)
+        # order_count.inc(1)
         if order.id:
             return "Can't create order with specific ID"
         db_order: models.Order = crud.create(db_session, models.Order, order)

@@ -1,4 +1,4 @@
-version: '3'
+version: '3.7'
 
 services:
   redis:
@@ -95,8 +95,8 @@ services:
       - ./otel-collector-config.yaml:/etc/otel-collector-config.yaml
     command: ["--config=/etc/otel-collector-config.yaml"]
     ports:
-      - "4317:4317"  #  OTLP gRPC port
-      - "4318:4318"  #  OTLP HTTP port
+      - "4317:4317"  # OTLP gRPC port
+      - "4318:4318"  # OTLP HTTP port
       - "9464:9464"
     depends_on:
       - jaeger
@@ -109,8 +109,8 @@ services:
     restart: always
     volumes:
       - ./prometheus.yml:/etc/prometheus/prometheus.yml
-    # command: 
-    #   - '--config.file=/etc/prometheus/prometheus.yml'
+    command: 
+      - '--config.file=/etc/prometheus/prometheus.yml'
     ports:
       - "9090:9090"
     networks:

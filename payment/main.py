@@ -1,5 +1,6 @@
 import os
 from typing import Any
+from fastapi import FastAPI, Response
 
 import requests
 from celery import Celery
@@ -15,7 +16,7 @@ from opentelemetry.instrumentation.celery import CeleryInstrumentor
 from opentelemetry.sdk.metrics import MeterProvider
 from opentelemetry.sdk.metrics.export import PeriodicExportingMetricReader
 from opentelemetry.exporter.otlp.proto.grpc.metric_exporter import OTLPMetricExporter
-import prometheus_client
+from prometheus_client import Counter, start_http_server, generate_latest
 
 from db import schemas, database, models
 
@@ -29,6 +30,8 @@ celery = Celery(
 models.Base.metadata.create_all(bind=database.engine)
 CeleryInstrumentor().instrument()
 
+app = FastAPI()
+FastAPIInstrumentor.instrument_app(app)
 
 # Dependency
 def get_db():
@@ -49,18 +52,25 @@ trace.set_tracer_provider(trace_provider)
 tracer = trace.get_tracer(__name__)
 
 # METRIC
+start_http_server(70)
 metric_reader = PeriodicExportingMetricReader(OTLPMetricExporter(endpoint="otel-collector:4317", insecure=True))
 metric_provider = MeterProvider(resource=Resource(attributes={SERVICE_NAME: "payment-service"}), metric_readers=[metric_reader])
 metrics.set_meter_provider(metric_provider)
 meter = metrics.get_meter(__name__)
-payment_count = prometheus_client.Counter(
+payment_count = Counter(
     "payment_count",
     "The number of payments being made"
 )
-payment_rollback_count = prometheus_client.Counter(
+payment_rollback_count = Counter(
     "payment_rollback_count",
     "The number of payments getting rolled back"
 )
+@app.get("/metrics")
+def get_metrics():
+    return Response(
+        media_type="text/plain",
+        content=generate_latest()
+    )
 
 def get_or_create_user(username: str):
     user = (
@@ -94,6 +104,7 @@ def delete():
 @celery.task(name="process")
 def process(order_data: dict[str, Any]):
     with tracer.start_as_current_span("payment-span"):
+        # payment_count.add(1)
         payment_count.inc(1)
         print(order_data)
         order: schemas.Order = schemas.Order.model_validate(order_data, strict=True)
