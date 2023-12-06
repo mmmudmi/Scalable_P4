@@ -5,6 +5,15 @@ from celery import Celery
 from celery.utils.log import get_task_logger
 from dotenv import load_dotenv
 from opentelemetry import trace
+from opentelemetry.exporter.jaeger.thrift import JaegerExporter
+from opentelemetry.sdk.resources import SERVICE_NAME, Resource
+from opentelemetry.sdk.trace import TracerProvider
+from opentelemetry.sdk.trace.export import BatchSpanProcessor
+from opentelemetry import trace
+from opentelemetry.sdk.resources import SERVICE_NAME, Resource
+from opentelemetry.exporter.otlp.proto.grpc.trace_exporter import OTLPSpanExporter
+from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
+from opentelemetry.instrumentation.celery import CeleryInstrumentor
 
 from db import schemas, database, models
 tracer = trace.get_tracer(__name__)
@@ -15,6 +24,8 @@ celery = Celery(
     broker=os.getenv("CELERY_BROKER", "redis://:your-password@localhost:6379/0"),
 )
 models.Base.metadata.create_all(bind=database.engine)
+CeleryInstrumentor().instrument()
+
 logger = get_task_logger(__name__)
 
 
@@ -29,6 +40,12 @@ def get_db():
 
 db_session = database.SessionLocal()
 
+# TRACE
+trace_provider = TracerProvider(resource=Resource(attributes={SERVICE_NAME: "inventory-service"}))
+otlp_trace_exporter = OTLPSpanExporter(endpoint="otel-collector:4317", insecure=True)
+trace_provider.add_span_processor(BatchSpanProcessor(otlp_trace_exporter))
+trace.set_tracer_provider(trace_provider)
+tracer = trace.get_tracer(__name__)
 
 def send_process(order_data: dict[str, Any]):
     celery.send_task("process", args=[order_data], queue="delivery")
@@ -48,7 +65,7 @@ def delete():
 
 @celery.task(name="process")
 def process(order_data: dict[str, Any]):
-    with tracer.start_as_current_span("inventorySpan"):
+    with tracer.start_as_current_span("inventory-span"):
         order: schemas.Order = schemas.Order.model_validate(order_data, strict=True)
         item = db_session.query(models.Item).filter(models.Item.name == order.item).first()
         if item is None:
@@ -71,7 +88,7 @@ def process(order_data: dict[str, Any]):
 
 @celery.task(name="rollback")
 def rollback(order_data: dict[str, Any]):
-    with tracer.start_as_current_span("inventoryRollBackSpan"):
+    with tracer.start_as_current_span("inventory-rollback-span"):
         order: schemas.Order = schemas.Order.model_validate(order_data, strict=True)
         item = db_session.query(models.Item).filter(models.Item.name == order.item).first()
         item.quantity += order.amount

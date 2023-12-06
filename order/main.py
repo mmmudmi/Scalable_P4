@@ -11,6 +11,12 @@ from opentelemetry import trace
 from opentelemetry.sdk.resources import SERVICE_NAME, Resource
 from opentelemetry.exporter.otlp.proto.grpc.trace_exporter import OTLPSpanExporter
 from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
+from opentelemetry.sdk.trace import TracerProvider
+from opentelemetry.sdk.trace.export import BatchSpanProcessor
+from opentelemetry.sdk.resources import Resource
+from opentelemetry.sdk.trace import TracerProvider
+from opentelemetry.sdk.trace.export import BatchSpanProcessor
+from opentelemetry.instrumentation.celery import CeleryInstrumentor
 
 import time
 
@@ -32,6 +38,7 @@ celery = Celery(
     "tasks",
     broker=os.getenv("CELERY_BROKER", "redis://:your-password@localhost:6379/0"),
 )
+CeleryInstrumentor().instrument()
 
 # TRACE
 trace_provider = TracerProvider(resource=Resource(attributes={SERVICE_NAME: "order-service"}))
@@ -41,7 +48,6 @@ trace.set_tracer_provider(trace_provider)
 tracer = trace.get_tracer(__name__)
 
 FastAPIInstrumentor.instrument_app(app)
-
 
 @app.get("/")
 async def read_root():
