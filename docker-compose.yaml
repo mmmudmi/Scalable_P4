@@ -25,6 +25,9 @@ services:
     image: order_service
     build:
       dockerfile: ./order/Dockerfile
+    environment:
+      - DATABASE_URL=mariadb://orders-username:orders-password@database:3306/orders
+      - CELERY_BROKER=redis://:your-password@redis:6379/0
     depends_on:
       - database
       - redis
@@ -36,6 +39,9 @@ services:
     image: payment_service
     build:
       dockerfile: ./payment/Dockerfile
+    environment:
+      - DATABASE_URL=mariadb://payment-username:payment-password@database:3306/payment
+      - CELERY_BROKER=redis://:your-password@redis:6379/0
     depends_on:
       - database
       - redis
@@ -45,6 +51,9 @@ services:
     image: inventory_service
     build:
       dockerfile: ./inventory/Dockerfile
+    environment:
+      - DATABASE_URL=mariadb://inventory-username:inventory-password@database:3306/inventory
+      - CELERY_BROKER=redis://:your-password@redis:6379/0
     depends_on:
       - database
       - redis
@@ -54,6 +63,9 @@ services:
     image: delivery_service
     build:
       dockerfile: ./delivery/Dockerfile
+    environment:
+      - DATABASE_URL=mariadb://delivery-username:delivery-password@database:3306/delivery
+      - CELERY_BROKER=redis://:your-password@redis:6379/0
     depends_on:
       - database
       - redis
