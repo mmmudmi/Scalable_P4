@@ -1,7 +1,6 @@
 import os
 from typing import Any
 from fastapi import FastAPI, Response
-
 import requests
 from celery import Celery
 from dotenv import load_dotenv
@@ -16,10 +15,13 @@ from opentelemetry.instrumentation.celery import CeleryInstrumentor
 from opentelemetry.sdk.metrics import MeterProvider
 from opentelemetry.sdk.metrics.export import PeriodicExportingMetricReader
 from opentelemetry.exporter.otlp.proto.grpc.metric_exporter import OTLPMetricExporter
-# from prometheus_client import Counter, start_http_server, generate_latest
 import prometheus_client
+import logging
+from opentelemetry.sdk._logs import LoggerProvider, LoggingHandler
+from opentelemetry.sdk._logs.export import BatchLogRecordProcessor
+from opentelemetry.exporter.otlp.proto.grpc._log_exporter import OTLPLogExporter
+from opentelemetry._logs import set_logger_provider
 from db import schemas, database, models
-tracer = trace.get_tracer(__name__)
 
 load_dotenv()
 celery = Celery(
@@ -65,9 +67,18 @@ delivery_rollback_count = prometheus_client.Counter(
     "The number of deliveries getting rolled back"
 )
 
+# LOGGING
+logger_provider = LoggerProvider(resource=Resource(attributes={SERVICE_NAME: "delivery-service"}))
+otlp_log_exporter = OTLPLogExporter(endpoint="otel-collector:4317", insecure=True)
+logger_provider.add_log_record_processor(BatchLogRecordProcessor(otlp_log_exporter))
+handler = LoggingHandler(level=logging.DEBUG, logger_provider=logger_provider)
+logging.getLogger().addHandler(handler)
+logger = logging.getLogger(__name__)
+logger.addHandler(handler)
+logger.setLevel(logging.DEBUG)
+
 def send_rollback(order_data: dict[str, Any]):
     celery.send_task("rollback", args=[order_data], queue="inventory")
-
 
 def send_process(order_data: dict[str, Any]):
     requests.put("http://order_service:80/order", json=order_data)
@@ -92,6 +103,7 @@ def process(order_data: dict[str, Any]):
         delivery_count.inc(1)
         order: schemas.Order = schemas.Order.model_validate(order_data, strict=True)
         if order.error is not None and "delivery" in order.error:
+            logger.error("Can't deliver")
             order.status = "Can't delivery"
             db_session.add(
                 models.Delivery(id=order.id, username=order.user, status=order.error)
@@ -99,11 +111,12 @@ def process(order_data: dict[str, Any]):
             db_session.commit()
             send_rollback(order.model_dump())
             return False
+        logger.info("Delivery processing...")
         db_session.add(
             models.Delivery(id=order.id, username=order.user, status="Completed")
         )
         db_session.commit()
-        order.status = "Completed"
+        order.status = "Delivered"
         send_process(order.model_dump())
         return True
 

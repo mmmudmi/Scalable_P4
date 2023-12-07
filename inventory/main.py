@@ -16,10 +16,13 @@ from opentelemetry.instrumentation.celery import CeleryInstrumentor
 from opentelemetry.sdk.metrics import MeterProvider
 from opentelemetry.sdk.metrics.export import PeriodicExportingMetricReader
 from opentelemetry.exporter.otlp.proto.grpc.metric_exporter import OTLPMetricExporter
-# from prometheus_client import Counter, start_http_server, generate_latest
 import prometheus_client
+import logging
+from opentelemetry.sdk._logs import LoggerProvider, LoggingHandler
+from opentelemetry.sdk._logs.export import BatchLogRecordProcessor
+from opentelemetry.exporter.otlp.proto.grpc._log_exporter import OTLPLogExporter
+from opentelemetry._logs import set_logger_provider
 from db import schemas, database, models
-tracer = trace.get_tracer(__name__)
 
 load_dotenv()
 celery = Celery(
@@ -65,6 +68,17 @@ inventory_rollback_count = prometheus_client.Counter(
     "inventory_rollback_count",
     "The number of times that inventory is getting added back"
 )
+
+# LOGGING
+logger_provider = LoggerProvider(resource=Resource(attributes={SERVICE_NAME: "inventory-service"}))
+otlp_log_exporter = OTLPLogExporter(endpoint="otel-collector:4317", insecure=True)
+logger_provider.add_log_record_processor(BatchLogRecordProcessor(otlp_log_exporter))
+handler = LoggingHandler(level=logging.DEBUG, logger_provider=logger_provider)
+logging.getLogger().addHandler(handler)
+logger = logging.getLogger(__name__)
+logger.addHandler(handler)
+logger.setLevel(logging.DEBUG)
+
 @app.get("/metrics")
 def get_metrics():
     return Response(
@@ -96,18 +110,22 @@ def process(order_data: dict[str, Any]):
         item = db_session.query(models.Item).filter(models.Item.name == order.item).first()
         if item is None:
             order.status = "Invalid Item"
+            logger.error("{order.item} is invalid")
             send_rollback(order.model_dump())
             return "Invalid Item"
         if int(item.quantity) < order.amount:
             order.status = "Out of Stock"
+            logger.error("{order.item} is out of stock")
             send_rollback(order.model_dump())
             return "Out of Stock"
 
+        logger.info("Updating inventory...")
         item.quantity -= order.amount
         db_session.query(models.Item).filter(models.Item.id == item.id).update(
             schemas.Item.model_validate(item).model_dump()
         )
         db_session.commit()
+        logger.info("Inventory updated!")
         send_process(order_data)
         return True
 
@@ -115,6 +133,7 @@ def process(order_data: dict[str, Any]):
 @celery.task(name="rollback")
 def rollback(order_data: dict[str, Any]):
     with tracer.start_as_current_span("inventory-rollback-span"):
+        logger.warn("Inventory rolling back is processing...")
         inventory_rollback_count.inc(1)
         order: schemas.Order = schemas.Order.model_validate(order_data, strict=True)
         item = db_session.query(models.Item).filter(models.Item.name == order.item).first()
@@ -123,5 +142,6 @@ def rollback(order_data: dict[str, Any]):
             schemas.Item.model_validate(item).model_dump()
         )
         db_session.commit()
+        logger.warn("Inventory rolling back is done")
         send_rollback(order_data)
         return True

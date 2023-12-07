@@ -1,7 +1,6 @@
 import os
 from typing import Any
 from fastapi import FastAPI, Response
-
 import requests
 from celery import Celery
 from dotenv import load_dotenv
@@ -16,12 +15,13 @@ from opentelemetry.instrumentation.celery import CeleryInstrumentor
 from opentelemetry.sdk.metrics import MeterProvider
 from opentelemetry.sdk.metrics.export import PeriodicExportingMetricReader
 from opentelemetry.exporter.otlp.proto.grpc.metric_exporter import OTLPMetricExporter
-# from prometheus_client import Counter, start_http_server, generate_latest
 import prometheus_client
-
+import logging
+from opentelemetry.sdk._logs import LoggerProvider, LoggingHandler
+from opentelemetry.sdk._logs.export import BatchLogRecordProcessor
+from opentelemetry.exporter.otlp.proto.grpc._log_exporter import OTLPLogExporter
+from opentelemetry._logs import set_logger_provider
 from db import schemas, database, models
-
-tracer = trace.get_tracer(__name__)
 
 load_dotenv()
 celery = Celery(
@@ -66,6 +66,18 @@ payment_rollback_count = prometheus_client.Counter(
     "payment_rollback_count",
     "The number of payments getting rolled back"
 )
+
+# LOGGING
+logger_provider = LoggerProvider(resource=Resource(attributes={SERVICE_NAME: "payment-service"}))
+otlp_log_exporter = OTLPLogExporter(endpoint="otel-collector:4317", insecure=True)
+logger_provider.add_log_record_processor(BatchLogRecordProcessor(otlp_log_exporter))
+handler = LoggingHandler(level=logging.DEBUG, logger_provider=logger_provider)
+logging.getLogger().addHandler(handler)
+logger = logging.getLogger(__name__)
+logger.addHandler(handler)
+logger.setLevel(logging.DEBUG)
+
+
 @app.get("/metrics")
 def get_metrics():
     return Response(
@@ -105,9 +117,8 @@ def delete():
 @celery.task(name="process")
 def process(order_data: dict[str, Any]):
     with tracer.start_as_current_span("payment-span"):
-        # payment_count.add(1)
         payment_count.inc(1)
-        print(order_data)
+        # print(order_data)
         order: schemas.Order = schemas.Order.model_validate(order_data, strict=True)
         user = get_or_create_user(order.user)
         if int(user.credit) < order.total:
@@ -116,15 +127,18 @@ def process(order_data: dict[str, Any]):
             )
             db_session.commit()
             order.status = "Not enough credit"
+            logger.error("Not enough credit...")
+            # logger.error("Not enough credit",extra={"user",order.user})
             send_rollback(order.model_dump())
             return False
         user.credit -= order.total
-
+        logger.info("Payment processing...")
         db_session.query(models.User).filter(models.User.id == user.id).update(
             schemas.User.model_validate(user).model_dump()
         )
         db_session.add(models.Payment(id=order.id, user_id=user.id))
         db_session.commit()
+        logger.info("Payment is Done!")
         send_process(order_data)
         return True
 
@@ -132,6 +146,7 @@ def process(order_data: dict[str, Any]):
 @celery.task(name="rollback")
 def rollback(order_data: dict[str, Any]):
     with tracer.start_as_current_span("payment-rollback-span"):
+        logger.warn("Payment rolling back is processing...")
         payment_rollback_count.inc(1)
         order: schemas.Order = schemas.Order.model_validate(order_data, strict=True)
         user = (
@@ -145,5 +160,6 @@ def rollback(order_data: dict[str, Any]):
             schemas.Payment(id=order.id, user_id=user.id, status=order.status).model_dump()
         )
         db_session.commit()
+        logger.warn("Payment rolling back is done")
         send_rollback(order_data)
         return True

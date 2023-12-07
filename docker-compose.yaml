@@ -23,6 +23,7 @@ services:
       - back-office
   order_service:
     image: order_service
+    restart: on-failure
     build:
       dockerfile: ./order/Dockerfile
     environment:
@@ -33,12 +34,14 @@ services:
       - redis
       - jaeger
       - prometheus
+      - loki
     ports:
       - "80:80"
     networks:
       - back-office
   payment_service:
     image: payment_service
+    restart: on-failure
     build:
       dockerfile: ./payment/Dockerfile
     environment:
@@ -49,12 +52,14 @@ services:
       - redis
       - jaeger
       - prometheus
+      - loki
     networks:
       - back-office
   inventory_service:
     image: inventory_service
     build:
       dockerfile: ./inventory/Dockerfile
+    restart: on-failure
     environment:
       - DATABASE_URL=mariadb://inventory-username:inventory-password@database:3306/inventory
       - CELERY_BROKER=redis://:your-password@redis:6379/0
@@ -63,12 +68,14 @@ services:
       - redis
       - jaeger
       - prometheus
+      - loki
     networks:
       - back-office
   delivery_service:
     image: delivery_service
     build:
       dockerfile: ./delivery/Dockerfile
+    restart: on-failure
     environment:
       - DATABASE_URL=mariadb://delivery-username:delivery-password@database:3306/delivery
       - CELERY_BROKER=redis://:your-password@redis:6379/0
@@ -77,11 +84,11 @@ services:
       - redis
       - jaeger
       - prometheus
+      - loki
     networks:
       - back-office
   jaeger:
     image: jaegertracing/all-in-one:latest
-    # restart: always
     ports:
       - "6831:6831/udp"
       - "16686:16686"
@@ -101,6 +108,7 @@ services:
     depends_on:
       - jaeger
       - prometheus
+      - loki
     networks:
       - back-office
 
@@ -128,6 +136,15 @@ services:
     depends_on:
       - prometheus
       - jaeger
+      - loki
+    networks:
+      - back-office
+  
+  loki:
+    image: grafana/loki:latest
+    ports:
+      - "3100:3100"
+    command: -config.file=/etc/loki/local-config.yaml
     networks:
       - back-office
 

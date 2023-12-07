@@ -15,6 +15,10 @@ from opentelemetry.sdk.metrics.export import PeriodicExportingMetricReader
 from opentelemetry.exporter.otlp.proto.grpc.metric_exporter import OTLPMetricExporter
 import prometheus_client
 import time
+import logging
+from opentelemetry.sdk._logs import LoggerProvider, LoggingHandler
+from opentelemetry.sdk._logs.export import BatchLogRecordProcessor
+from opentelemetry.exporter.otlp.proto.grpc._log_exporter import OTLPLogExporter
 
 
 models.Base.metadata.create_all(bind=database.engine)
@@ -53,11 +57,16 @@ order_count = prometheus_client.Counter(
     "order_count",
     "The number of orders being made"
 )
-# order_count = meter.create_counter(
-#     "order_count",
-#     description="The number of orders being made",
-#     unit="1",
-# )
+
+# LOGGING
+logger_provider = LoggerProvider(resource=Resource(attributes={SERVICE_NAME: "order-service"}))
+otlp_log_exporter = OTLPLogExporter(endpoint="otel-collector:4317", insecure=True)
+logger_provider.add_log_record_processor(BatchLogRecordProcessor(otlp_log_exporter))
+handler = LoggingHandler(level=logging.DEBUG, logger_provider=logger_provider)
+logging.getLogger().addHandler(handler)
+logger = logging.getLogger(__name__)
+
+
 FastAPIInstrumentor.instrument_app(app)
 
 @app.get("/metrics")
@@ -72,6 +81,7 @@ def get_metrics():
 async def read_root():
     with tracer.start_as_current_span("parent-span"):
         time.sleep(1)
+        logger.info("HELLO WORLD!",extra={"user":"mimi"})
         with tracer.start_as_current_span("child-span"):
             # root_count.inc(1)
             return {"message": "Hello, world!"}
@@ -84,10 +94,10 @@ def get_all_order():
 @app.post("/order")
 def create_order(order: schemas.Order):
     with tracer.start_as_current_span("order-span"):
-        # order_count.add(1)
+        logger.info("Order being made", extra={"user":order.user,"item":order.item,"amount":order.amount,"total":order.total})
         order_count.inc(1)
         if order.id:
-            return "Can't create order with specific ID"
+            logger.error("Can't create order with specific ID",extra={"user":order.user})
         db_order: models.Order = crud.create(db_session, models.Order, order)
         order.id = db_order.id
         celery.send_task("process", args=[order.model_dump()], queue="payment")
