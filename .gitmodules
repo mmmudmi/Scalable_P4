@@ -1,4 +1,0 @@
-[submodule "signoz"]
-	path = signoz
-	url = https://github.com/SigNoz/signoz.git
-	branch = main
