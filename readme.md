@@ -1,29 +1,5 @@
-docker-compose up
+run `docker compose up` to start the services
 
-alembic revision --autogenerate
+run `pytest` to run automate testing script
 
-alembic upgrade head
-
-uvicorn main:app --reload
-
-celery -A worker.celery worker -E --pool=solo --loglevel=info
-
-pytest -s
-
-pytest --verbose
-
-pytest
-
-Running Jaeger locally using docker, http://localhost:16686/ :
-docker run -d --name jaeger \
--e COLLECTOR_ZIPKIN_HOST_PORT=:9411 \
--p 5775:5775/udp \
--p 6831:6831/udp \
--p 6832:6832/udp \
--p 5778:5778 \
--p 16686:16686 \
--p 14250:14250 \
--p 14268:14268 \
--p 14269:14269 \
--p 9411:9411 \
-jaegertracing/all-in-one:1.30
+check the database to see the result
