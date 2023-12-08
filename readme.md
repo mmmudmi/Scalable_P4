@@ -31,8 +31,8 @@ check the database to see the result
 We need to set datasources to specific port
 And then connect to dashboard
 ![setup grafana Image](images/setup_grafana.png)
-The dashboard is saved locally
-Here is what my grafana dashbord look like 
+The dashboard is saved locally. You have to set up for yourself. 
+Here is what my grafana dashbord look like after running test_simple.py.
 
 ### Monitoring Jaeger
 Click [http://localhost:16686/](http://localhost:16686)
