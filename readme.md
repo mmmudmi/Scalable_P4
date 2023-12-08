@@ -8,8 +8,8 @@ docker compose build
 docker compose up -d
 ```
 ## How to test it 
-run `pytest` to run automate testing script
-test file path: Scalable_P4/test/test_simple.py
+- run `pytest` to run automate testing script
+- test file path: Scalable_P4/test/test_simple.py
 
 ```bash
 cd test
@@ -22,8 +22,8 @@ check the database to see the result
 
 ## Monitoring diagram
 ![Monitoring Image](images/monitoring.png)
-We use Loki (logging), Jaeger (tracing), Prometheus (Metics) 
-We then use Grafana to bring together data from Loki, Jaeger and Prometheus
+- We use Loki (logging), Jaeger (tracing), Prometheus (Metics) 
+- We then use Grafana to bring together data from Loki, Jaeger and Prometheus
 ### Monitoring Grafana
 - Username: admin
 - Password: admin 
