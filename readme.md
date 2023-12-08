@@ -46,3 +46,7 @@ These are metrics that we monitor
 - inventory_count_total
 - inventory_rollback_count_total
 - delivery_count_total
+
+## Contributors
+- Pearploy Chaicharoensin 6381278 (Mudmee)
+- Chiraphat Lua 6381360 (Seowlong)
